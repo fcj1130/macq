@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- App Extension 必须沙箱化，否则访达不会加载 -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+
+	<!-- 与主程序共享配置。
+	     曾经用 App Group 容器做主路径，但它属于需要 provisioning profile 的
+	     capability，自签名证书签不出来（Xcode 报 requires a provisioning profile），
+	     所以改成只走主程序数据目录：主程序（非沙箱）写 JSON，扩展靠下面这条
+	     例外授权只读访问。 -->
+	<key>com.apple.security.temporary-exception.files.home-relative-path.read-only</key>
+	<array>
+		<string>/Library/Application Support/macq/</string>
+	</array>
+
+	<!-- 新建文件后「选中并进入重命名」：AppleScript 让 Finder 选中文件，
+	     System Events 给 Finder 发回车（系统新建文件夹就是这个链路）。
+	     授权没给时脚本失败，功能退回「只建文件」。 -->
+	<key>com.apple.security.automation.apple-events</key>
+	<true/>
+	<key>com.apple.security.temporary-exception.apple-events</key>
+	<array>
+		<string>com.apple.finder</string>
+		<string>com.apple.systemevents</string>
+	</array>
+</dict>
+</plist>

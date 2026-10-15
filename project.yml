@@ -1,0 +1,82 @@
+name: macq
+options:
+  bundleIdPrefix: com.mymy
+  createIntermediateGroups: true
+  deploymentTarget:
+    macOS: "14.0"
+settings:
+  base:
+    SWIFT_VERSION: "5"
+    MARKETING_VERSION: "0.3.0"
+    CURRENT_PROJECT_VERSION: "2"
+    # 稳定的本地签名身份（自签名证书 macq-dev）：
+    # ad-hoc 签名每次重编译都会换身份，系统的辅助功能/输入监控授权会随之作废，
+    # 用固定证书后指定要求只依赖 bundle id + 证书，重编译与不同构建路径共用同一份授权。
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: macq-dev
+    DEVELOPMENT_TEAM: ""
+    PROVISIONING_PROFILE_SPECIFIER: ""
+    OTHER_CODE_SIGN_FLAGS: "--timestamp=none" 
+targets:
+  # 魔法右键的 Finder 扩展。FinderSync 扩展必须嵌在 App 的 Contents/PlugIns/
+  # 且必须沙箱化；跨进程配置靠外部约定位置（见 Sources/Tools/MagicRightClickCore.swift）。
+  magicRightClickFinder:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: FinderExtension
+        excludes:
+          - "*.entitlements"
+          - "Info.plist"
+      # 与主程序共用的纯逻辑，两个 target 各编译一份
+      - Sources/Tools/MagicRightClickCore.swift
+    settings:
+      base:
+        PRODUCT_NAME: MagicRightClickFinder
+        PRODUCT_BUNDLE_IDENTIFIER: com.mymy.macq.FinderRightClick
+        CODE_SIGN_ENTITLEMENTS: FinderExtension/MagicRightClickFinder.entitlements
+        ENABLE_PREVIEWS: "NO"
+        SKIP_INSTALL: "YES"
+    info:
+      path: FinderExtension/Info.plist
+      properties:
+        CFBundleDisplayName: MacQ 魔法右键
+        CFBundleName: MagicRightClickFinder
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSUIElement: true
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.FinderSync
+          NSExtensionPrincipalClass: FinderRightClick
+  macq:
+    type: application
+    platform: macOS
+    sources:
+      - Sources
+      - Resources
+    dependencies:
+      - target: magicRightClickFinder
+    settings:
+      base:
+        PRODUCT_NAME: MacQ
+        PRODUCT_BUNDLE_IDENTIFIER: com.mymy.macq
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_PREVIEWS: "YES"
+    info:
+      path: Resources/Info.plist
+      properties:
+        CFBundleDisplayName: MacQ
+        CFBundleName: MacQ
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.utilities
+        NSPrincipalClass: NSApplication
+        NSAppleEventsUsageDescription: 「新建文件」需要在建好后选中文件并进入重命名（与系统新建文件夹一致）。
+        NSScreenCaptureUsageDescription: MacQ 截图需要屏幕录制权限，用于框选区域并生成图片。
+
+        # 访达扩展是沙箱进程，不能自己启动终端，只能把请求交给主程序执行
+        # （见 Sources/Tools/MagicRightClickCore.swift 的 AppURL）
+        CFBundleURLTypes:
+          - CFBundleURLName: com.mymy.macq.url
+            CFBundleURLSchemes:
+              - macq
