@@ -72,6 +72,13 @@ struct DevToolboxPanelView: View {
             ).toolPane(.json, selected: state.selected)
 
             LiveConverter(
+                title: "JSON 转 PHP",
+                directions: [("转换", DevToolboxCore.jsonToPHP)],
+                placeholder: "粘贴或输入 JSON…",
+                emptyHint: "生成 PHP 5.4+ 短数组语法（[ … ]）；字符串用单引号转义，对象键按字典序输出。"
+            ).toolPane(.jsonPHP, selected: state.selected)
+
+            LiveConverter(
                 title: "Base64",
                 directions: [("编码", { $0.isEmpty ? nil : DevToolboxCore.base64Encode($0) }),
                              ("解码", DevToolboxCore.base64Decode)],
@@ -137,16 +144,21 @@ private struct LiveConverter: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Picker("", selection: $direction) {
-                    ForEach(directions.indices, id: \.self) { index in
-                        Text(AppLanguage.localized(directions[index].label)).tag(index)
+                if directions.count > 1 {
+                    Picker("", selection: $direction) {
+                        ForEach(directions.indices, id: \.self) { index in
+                            Text(AppLanguage.localized(directions[index].label)).tag(index)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                    .frame(width: 170)
+                } else {
+                    // 单向转换：单段选择器没有意义，直接显示工具名
+                    Text(AppLanguage.localized(title)).font(.headline)
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 170)
                 Spacer()
                 if input.isEmpty {
-                    Text(AppLanguage.localized(title)).font(.headline)
+                    if directions.count > 1 { Text(AppLanguage.localized(title)).font(.headline) }
                 } else if let output {
                     Button(copied ? AppLanguage.localized("已复制 ✓") : AppLanguage.localized("复制结果")) { copy(output) }
                         .buttonStyle(.bordered)

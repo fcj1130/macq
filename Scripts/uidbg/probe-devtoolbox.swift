@@ -353,13 +353,58 @@ func runPasswordProbe() {
     expect(DevTool.allCases.contains(.password), "目录含密码工具")
     expect(DevTool.defaultOrder.last == .password, "新工具默认排在末尾，不打乱已有顺序")
     expect(DevTool.password.icon == "key", "密码工具图标")
+    expect(NSImage(systemSymbolName: DevTool.jsonPHP.icon, accessibilityDescription: nil) != nil, "JSON 转 PHP 图标存在")
+    expect(DevTool.jsonPHP.name == "JSON 转 PHP", "新工具名称")
 
     print("")
     print("密码探针：\(failures) 失败")
 }
 
+/// JSON → PHP：格式、转义、类型、键序、非法输入
+@MainActor
+func runJSONPHPProbe() {
+    print("\nJSON → PHP")
+    // 期望值按行拼，避免多行字符串字面量的缩进规则干扰
+    func php(_ lines: [String]) -> String { lines.joined(separator: "\n") }
+
+    expect(DevToolboxCore.jsonToPHP(#"{"a":1,"b":"x"}"#)
+            == php(["[", "    'a' => 1,", "    'b' => 'x',", "]"]),
+           "对象 → 短数组，键按字典序")
+    expect(DevToolboxCore.jsonToPHP(#"{"list":[1,2],"obj":{"k":null}}"#)
+            == php(["[",
+                    "    'list' => [",
+                    "        1,",
+                    "        2,",
+                    "    ],",
+                    "    'obj' => [",
+                    "        'k' => null,",
+                    "    ],",
+                    "]"]),
+           "嵌套缩进 4 空格")
+    expect(DevToolboxCore.jsonToPHP(#"{"s":"a'b\\c"}"#)
+            == php(["[", #"    's' => 'a\'b\\c',"#, "]"]),
+           "字符串：单引号与反斜杠转义")
+    expect(DevToolboxCore.jsonToPHP(#"{"t":true,"f":false}"#)
+            == php(["[", "    'f' => false,", "    't' => true,", "]"]),
+           "布尔输出 true/false，不是 1/0")
+    expect(DevToolboxCore.jsonToPHP(#"{"i":3,"n":1.5}"#)
+            == php(["[", "    'i' => 3,", "    'n' => 1.5,", "]"]),
+           "整数与浮点")
+    expect(DevToolboxCore.jsonToPHP("{}") == "[]", "空对象 → []")
+    expect(DevToolboxCore.jsonToPHP("[]") == "[]", "空数组 → []")
+    expect(DevToolboxCore.jsonToPHP(#"[1,"a",null]"#)
+            == php(["[", "    1,", "    'a',", "    null,", "]"]),
+           "顶层数组")
+    expect(DevToolboxCore.jsonToPHP(#"{"名":"值"}"#)
+            == php(["[", "    '名' => '值',", "]"]),
+           "中文原样保留")
+    expect(DevToolboxCore.jsonToPHP("{oops}") == nil, "非法 JSON 返回 nil")
+    expect(DevToolboxCore.jsonToPHP("") == nil, "空输入返回 nil")
+}
+
 MainActor.assumeIsolated {
     runProbe()
     runPasswordProbe()
+    runJSONPHPProbe()
     exit(failures == 0 ? 0 : 1)
 }

@@ -8,6 +8,7 @@ import Vision
 /// 面板视图只负责输入输出，转换全部走这里。
 enum DevTool: String, CaseIterable, Identifiable, Codable {
     case json
+    case jsonPHP
     case base64
     case url
     case timestamp
@@ -23,6 +24,7 @@ enum DevTool: String, CaseIterable, Identifiable, Codable {
     var name: String {
         switch self {
         case .json: "JSON 美化"
+        case .jsonPHP: "JSON 转 PHP"
         case .base64: "Base64"
         case .url: "URL 编码"
         case .timestamp: "时间戳"
@@ -38,6 +40,7 @@ enum DevTool: String, CaseIterable, Identifiable, Codable {
     var icon: String {
         switch self {
         case .json: "curlybraces"
+        case .jsonPHP: "arrow.left.arrow.right"
         case .base64: "doc.badge.gearshape"
         case .url: "link"
         case .timestamp: "clock"
@@ -51,7 +54,7 @@ enum DevTool: String, CaseIterable, Identifiable, Codable {
     }
 
     /// 面板左侧导航的默认顺序
-    static let defaultOrder: [DevTool] = [.json, .base64, .url, .timestamp, .uuid, .html, .hash, .qr, .picker, .password]
+    static let defaultOrder: [DevTool] = [.json, .jsonPHP, .base64, .url, .timestamp, .uuid, .html, .hash, .qr, .picker, .password]
 }
 
 enum DevToolboxCore {
@@ -130,6 +133,52 @@ enum DevToolboxCore {
         guard let object = try? JSONSerialization.jsonObject(with: Data(input.utf8), options: [.fragmentsAllowed]) else { return nil }
         guard let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .fragmentsAllowed]) else { return nil }
         return String(data: data, encoding: .utf8)
+    }
+
+    // MARK: - JSON → PHP
+
+    /// JSON 转 PHP 数组字面量（5.4+ 短数组语法）。
+    /// 对象键按字典序输出：JSONSerialization 的字典本身无序，与「JSON 美化」保持一致的行为。
+    static func jsonToPHP(_ input: String) -> String? {
+        guard let object = try? JSONSerialization.jsonObject(with: Data(input.utf8), options: [.fragmentsAllowed])
+        else { return nil }
+        return phpLiteral(object, indent: 0)
+    }
+
+    private static func phpLiteral(_ value: Any, indent: Int) -> String {
+        let pad = String(repeating: " ", count: indent)
+        let inner = String(repeating: " ", count: indent + 4)
+        if let dict = value as? [String: Any] {
+            guard !dict.isEmpty else { return "[]" }
+            let lines = dict.keys.sorted().map { key in
+                "\(inner)\(phpString(key)) => \(phpLiteral(dict[key]!, indent: indent + 4)),"
+            }
+            return "[\n" + lines.joined(separator: "\n") + "\n" + pad + "]"
+        }
+        if let array = value as? [Any] {
+            guard !array.isEmpty else { return "[]" }
+            let lines = array.map { "\(inner)\(phpLiteral($0, indent: indent + 4))," }
+            return "[\n" + lines.joined(separator: "\n") + "\n" + pad + "]"
+        }
+        if let string = value as? String { return phpString(string) }
+        if let number = value as? NSNumber { return phpNumber(number) }
+        return "null"
+    }
+
+    /// PHP 单引号字符串：只有 \\ 和 ' 需要转义
+    private static func phpString(_ text: String) -> String {
+        "'" + text
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "'", with: "\\'") + "'"
+    }
+
+    /// JSON 的 true/false 也是 NSNumber，必须按 CFBoolean 类型区分，否则会输出 1/0
+    private static func phpNumber(_ number: NSNumber) -> String {
+        if CFGetTypeID(number) == CFBooleanGetTypeID() {
+            return number.boolValue ? "true" : "false"
+        }
+        if CFNumberIsFloatType(number) { return "\(number.doubleValue)" }
+        return number.stringValue
     }
 
     // MARK: - Base64

@@ -414,3 +414,6 @@
 "在访达里右键文件、文件夹或空白处都能看到已开启的项；「新建文件」只在文件夹空白处出现。" = "Enabled items appear when you right-click files, folders, or blank areas; New File appears only on a folder's blank area.";
 "访达右键增强：复制路径、进入终端、新建文件" = "Finder context menu: copy path, open terminal, new file";
 "未命名" = "Untitled";
+"JSON 转 PHP" = "JSON to PHP";
+"转换" = "Convert";
+"生成 PHP 5.4+ 短数组语法（[ … ]）；字符串用单引号转义，对象键按字典序输出。" = "Emits PHP 5.4+ short array syntax ([ … ]); strings are single-quoted and escaped, object keys are sorted.";
