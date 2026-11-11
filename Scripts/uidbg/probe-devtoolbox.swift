@@ -351,7 +351,7 @@ func runPasswordProbe() {
 
     // 导航与图标
     expect(DevTool.allCases.contains(.password), "目录含密码工具")
-    expect(DevTool.defaultOrder.last == .password, "新工具默认排在末尾，不打乱已有顺序")
+    expect(DevTool.defaultOrder.suffix(2) == [.password, .notepad], "新工具默认排在末尾，不打乱已有顺序")
     expect(DevTool.password.icon == "key", "密码工具图标")
     expect(NSImage(systemSymbolName: DevTool.jsonPHP.icon, accessibilityDescription: nil) != nil, "JSON 转 PHP 图标存在")
     expect(DevTool.jsonPHP.name == "JSON 转 PHP", "新工具名称")
@@ -402,9 +402,48 @@ func runJSONPHPProbe() {
     expect(DevToolboxCore.jsonToPHP("") == nil, "空输入返回 nil")
 }
 
+/// 记事本：增删改、拖拽排序、搜索、持久化回读
+@MainActor
+func runNotepadProbe() {
+    let settings = ToolSettings(tool: "notepad-probe", schema: 1)
+    settings.removeAll()
+    let store = NotepadStore(settings: settings)
+    let a = store.add("alpha 一")
+    let b = store.add("Beta 二")
+    let c = store.add("gamma 三")
+    expect(store.notes.map(\.id) == [c, b, a], "新增插到最前")
+    store.move(a, to: c)
+    expect(store.notes.map(\.id) == [a, c, b], "拖拽：a 移到最前")
+    store.move(c, to: b)
+    expect(store.notes.map(\.id) == [a, b, c], "拖拽：c 往下移")
+    let before = store.notes[0].updatedAt
+    store.update(a, text: "ALPHA 改")
+    expect(store.notes[0].text == "ALPHA 改" && store.notes[0].updatedAt >= before, "编辑刷新内容与时间")
+    expect(store.filtered("beta").map(\.id) == [b], "搜索大小写不敏感")
+    expect(store.filtered("  ").count == 3, "空搜索返回全部")
+    store.remove(b, permanently: false)
+    expect(store.notes.map(\.id) == [a, b, c] && store.notes[1].deletedAt != nil, "软删除：保留并打标记")
+    store.remove(b, permanently: true)
+    expect(store.notes.map(\.id) == [a, c], "永久删除")
+    // 旧数据（无 deletedAt 键）仍能解码
+    let legacy = #"[{"id":"\#(UUID().uuidString)","text":"old","updatedAt":0}]"#.data(using: .utf8)!
+    expect((try? JSONDecoder().decode([NotepadNote].self, from: legacy))?.first?.deletedAt == nil, "旧数据兼容解码")
+    let reloaded = NotepadStore(settings: settings)
+    expect(reloaded.notes == store.notes, "持久化回读一致")
+    settings.removeAll()
+
+    let window = host(NotepadPreviewHost(store: reloaded), width: 560, height: 260)
+    if let rep = render(window) {
+        let texts = ocr(rep, "notepad").joined(separator: " ")
+        expect(texts.contains("ALPHA") && texts.contains("gamma"), "列表渲染出内容")
+        expect(texts.contains("新增"), "新增按钮")
+    }
+}
+
 MainActor.assumeIsolated {
     runProbe()
     runPasswordProbe()
     runJSONPHPProbe()
+    runNotepadProbe()
     exit(failures == 0 ? 0 : 1)
 }

@@ -24,6 +24,7 @@
 		47075498857DE04FEA513C6B /* ToolRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71A4C0D32793E38CA8643A12 /* ToolRegistry.swift */; };
 		49FA47376FF57547244293F1 /* DevToolbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E9365F9B3F5091188CA75E2 /* DevToolbox.swift */; };
 		4AB9E2071D57CA04B43FE70E /* DevToolboxCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 218E498B9504F14A72779271 /* DevToolboxCore.swift */; };
+		4DDD8996AF36FCA32927C121 /* NotepadStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D64813E745A62F0E42412B6 /* NotepadStore.swift */; };
 		5167CF12CB75565EF845AF61 /* ClipboardMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = C34A626FAC44DD2A20439599 /* ClipboardMonitor.swift */; };
 		5E283404581C82128F42C096 /* ScreenEyedropper.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EEAF7A7B84258669C66CA4 /* ScreenEyedropper.swift */; };
 		7382EC72424E4AB52B5F00AC /* MagicClipboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2288169E42A87F152F8444BA /* MagicClipboard.swift */; };
@@ -91,6 +92,7 @@
 		218E498B9504F14A72779271 /* DevToolboxCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevToolboxCore.swift; sourceTree = "<group>"; };
 		2288169E42A87F152F8444BA /* MagicClipboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MagicClipboard.swift; sourceTree = "<group>"; };
 		22886122DF5835DD088F0A0D /* ScreenshotPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotPicker.swift; sourceTree = "<group>"; };
+		4D64813E745A62F0E42412B6 /* NotepadStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotepadStore.swift; sourceTree = "<group>"; };
 		51EA5289CE8F3231CBC434A9 /* DevToolboxPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevToolboxPanelView.swift; sourceTree = "<group>"; };
 		57DEFF311A9427DA64713059 /* ClipboardPickerWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardPickerWindow.swift; sourceTree = "<group>"; };
 		5DB388FDC7524B3D0CB3CEFF /* DevToolboxWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevToolboxWindow.swift; sourceTree = "<group>"; };
@@ -246,6 +248,7 @@
 				E6CE94B0AEE07FCBE5C1C345 /* MagicMouse.swift */,
 				6B99ECB4408FEADC8C412A2C /* MagicRightClick.swift */,
 				7244FB7BA3D57D7DA2509C2D /* MagicRightClickCore.swift */,
+				4D64813E745A62F0E42412B6 /* NotepadStore.swift */,
 				E9EEAF7A7B84258669C66CA4 /* ScreenEyedropper.swift */,
 				7711CA5A454030FABB320C28 /* ScreenshotCore.swift */,
 				22886122DF5835DD088F0A0D /* ScreenshotPicker.swift */,
@@ -382,6 +385,7 @@
 				91CF0B5A64B2E3041632A11C /* MagicRightClickView.swift in Sources */,
 				C2CC8C6D1E62723C142A2072 /* MainView.swift in Sources */,
 				09B9C5FD2FE2DEB095635277 /* MyToolsView.swift in Sources */,
+				4DDD8996AF36FCA32927C121 /* NotepadStore.swift in Sources */,
 				D1234FE021A2770A3518AAC0 /* PermissionSection.swift in Sources */,
 				5E283404581C82128F42C096 /* ScreenEyedropper.swift in Sources */,
 				87C9067FC5EB02DF4FDDE22E /* ScreenshotCore.swift in Sources */,

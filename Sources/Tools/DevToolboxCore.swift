@@ -18,6 +18,7 @@ enum DevTool: String, CaseIterable, Identifiable, Codable {
     case qr
     case picker
     case password
+    case notepad
 
     var id: String { rawValue }
 
@@ -34,6 +35,7 @@ enum DevTool: String, CaseIterable, Identifiable, Codable {
         case .qr: "二维码"
         case .picker: "取色器"
         case .password: "随机密码"
+        case .notepad: "记事本"
         }
     }
 
@@ -50,11 +52,12 @@ enum DevTool: String, CaseIterable, Identifiable, Codable {
         case .qr: "qrcode"
         case .picker: "eyedropper"
         case .password: "key"
+        case .notepad: "list.bullet.rectangle"
         }
     }
 
     /// 面板左侧导航的默认顺序
-    static let defaultOrder: [DevTool] = [.json, .jsonPHP, .base64, .url, .timestamp, .uuid, .html, .hash, .qr, .picker, .password]
+    static let defaultOrder: [DevTool] = [.json, .jsonPHP, .base64, .url, .timestamp, .uuid, .html, .hash, .qr, .picker, .password, .notepad]
 }
 
 enum DevToolboxCore {

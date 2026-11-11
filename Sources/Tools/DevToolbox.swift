@@ -39,6 +39,9 @@ final class DevToolbox: ToggleableTool, PermissionReporting {
 
     let recorder = HotKeyRecorder()
 
+    /// 记事本数据（与工具箱共用配置命名空间）
+    let notepad: NotepadStore
+
     private static let schema = 1
     private static let migrations: [Int: (ToolSettings) -> Void] = [:]
     private let settings: ToolSettings
@@ -66,6 +69,7 @@ final class DevToolbox: ToggleableTool, PermissionReporting {
         restored.append(contentsOf: DevTool.defaultOrder.filter { !placed.contains($0) })
         order = restored
         self.settings = settings
+        notepad = NotepadStore(settings: settings)
 
         hotKey.onFire = { [weak self] in self?.fire() }
         doubleTap.onFire = { [weak self] in self?.fire() }

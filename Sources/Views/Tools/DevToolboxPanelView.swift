@@ -108,6 +108,7 @@ struct DevToolboxPanelView: View {
             QRTool().toolPane(.qr, selected: state.selected)
             ColorPickTool().toolPane(.picker, selected: state.selected)
             PasswordTool(tool: tool).toolPane(.password, selected: state.selected)
+            NotepadTool(store: tool.notepad).toolPane(.notepad, selected: state.selected)
         }
     }
 }
@@ -1224,5 +1225,184 @@ private struct PasswordTool: View {
         items.insert(contentsOf: fresh, at: 0)
         if items.count > Self.maxItems { items.removeLast(items.count - Self.maxItems) }
         copiedIndex = nil
+    }
+}
+
+// MARK: - 记事本
+
+/// 给探针离屏渲染用（NotepadTool 是 private）
+struct NotepadPreviewHost: View {
+    let store: NotepadStore
+    var body: some View { NotepadTool(store: store) }
+}
+
+/// 记事本：一行一条（内容 + 更新时间），列表只读；新增 / 编辑都走弹框输入。
+/// 拖左侧把手排序、搜索过滤、删除（确认）；未在输入框里时 ⌘V 直接新建一条（见 DevToolboxWindow.handle）
+private struct NotepadTool: View {
+    let store: NotepadStore
+
+    @State private var query = ""
+    @State private var pendingDelete: NotepadNote?
+    @State private var deletePermanently = false
+    /// 弹框编辑器：editingID 为 nil 表示新增
+    @State private var showEditor = false
+    @State private var editingID: UUID?
+    @State private var draft = ""
+
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd HH:mm"
+        return formatter
+    }()
+
+    var body: some View {
+        let notes = store.filtered(query)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                TextField(AppLanguage.localized("搜索记事本"), text: $query)
+                    .textFieldStyle(.roundedBorder)
+                Button {
+                    openEditor(nil)
+                } label: {
+                    Label(AppLanguage.localized("新增"), systemImage: "plus")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+
+            if notes.isEmpty {
+                Text(AppLanguage.localized(query.isEmpty ? "还没有记录：点「新增」，或直接 ⌘V 粘贴新建" : "没有匹配的记录"))
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 24)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(notes) { note in
+                            row(note)
+                                .dropDestination(for: String.self) { dragged, _ in
+                                    guard let raw = dragged.first, let id = UUID(uuidString: raw) else { return false }
+                                    withAnimation { store.move(id, to: note.id) }
+                                    return true
+                                }
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        // alert 里只能放单行 TextField，多行输入用 sheet + TextEditor
+        .sheet(isPresented: $showEditor) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(AppLanguage.localized(editingID == nil ? "新增记录" : "编辑记录"))
+                    .font(.headline)
+                TextEditor(text: $draft)
+                    .font(.system(size: 13))
+                    .scrollContentBackground(.hidden)
+                    .padding(6)
+                    .background(.background, in: RoundedRectangle(cornerRadius: 6))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(.quaternary))
+                    .frame(width: 420, height: 180)
+                HStack {
+                    Text(AppLanguage.localized("⌘↩ 保存")).font(.caption).foregroundStyle(.tertiary)
+                    Spacer()
+                    Button(AppLanguage.localized("取消"), role: .cancel) { showEditor = false }
+                        .keyboardShortcut(.cancelAction)
+                    // 回车留给换行，保存用 ⌘↩
+                    Button(AppLanguage.localized("保存")) { saveDraft(); showEditor = false }
+                        .keyboardShortcut(.return, modifiers: .command)
+                        .buttonStyle(.borderedProminent)
+                }
+            }
+            .padding(16)
+        }
+        // alert 放不了勾选框，删除确认也用 sheet
+        .sheet(item: $pendingDelete) { note in
+            VStack(alignment: .leading, spacing: 10) {
+                Text(AppLanguage.localized("删除这条记录？")).font(.headline)
+                Text(note.text)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(4)
+                    .frame(width: 360, alignment: .leading)
+                Toggle(AppLanguage.localized("永久删除（不勾选则只标记删除线）"), isOn: $deletePermanently)
+                    .toggleStyle(.checkbox)
+                HStack {
+                    Spacer()
+                    Button(AppLanguage.localized("取消"), role: .cancel) { pendingDelete = nil }
+                        .keyboardShortcut(.cancelAction)
+                    Button(AppLanguage.localized("删除"), role: .destructive) {
+                        store.remove(note.id, permanently: deletePermanently)
+                        pendingDelete = nil
+                    }
+                    .keyboardShortcut(.defaultAction)
+                }
+            }
+            .padding(16)
+        }
+    }
+
+    private func openEditor(_ note: NotepadNote?) {
+        editingID = note?.id
+        draft = note?.text ?? ""
+        showEditor = true
+    }
+
+    private func saveDraft() {
+        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }   // 空内容不建 / 不改
+        if let id = editingID {
+            store.update(id, text: text)
+        } else {
+            query = ""   // 新记录可能不匹配当前搜索，清掉免得"加了看不见"
+            store.add(text)
+        }
+    }
+
+    private func row(_ note: NotepadNote) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "line.3.horizontal")
+                .foregroundStyle(.tertiary)
+                .frame(width: 18, height: 28)
+                .contentShape(Rectangle())
+                .draggable(note.id.uuidString) {
+                    Text(note.text).lineLimit(1).padding(6)
+                }
+            Text(note.text)
+                .strikethrough(note.deletedAt != nil)
+                .foregroundStyle(note.deletedAt != nil ? .secondary : .primary)
+                .font(.system(size: 12.5))
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .help(note.text)
+            Text(Self.timeFormatter.string(from: note.updatedAt))
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+            Button {
+                openEditor(note)
+            } label: {
+                Image(systemName: "square.and.pencil")
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(.secondary)
+            .help(AppLanguage.localized("编辑"))
+            Button {
+                deletePermanently = false   // 每次默认不勾选
+                pendingDelete = note
+            } label: {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(.secondary)
+            .help(AppLanguage.localized("删除"))
+        }
+        .padding(.horizontal, 6)
+        .frame(height: 32)
+        .overlay(alignment: .bottom) { Divider().opacity(0.5) }
     }
 }

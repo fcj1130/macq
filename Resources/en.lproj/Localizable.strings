@@ -417,3 +417,13 @@
 "JSON 转 PHP" = "JSON to PHP";
 "转换" = "Convert";
 "生成 PHP 5.4+ 短数组语法（[ … ]）；字符串用单引号转义，对象键按字典序输出。" = "Emits PHP 5.4+ short array syntax ([ … ]); strings are single-quoted and escaped, object keys are sorted.";
+"记事本" = "Notepad";
+"搜索记事本" = "Search notes";
+"新增" = "Add";
+"还没有记录：点「新增」，或直接 ⌘V 粘贴新建" = "No notes yet: click Add, or press ⌘V to paste a new one";
+"没有匹配的记录" = "No matching notes";
+"删除这条记录？" = "Delete this note?";
+"新增记录" = "New Note";
+"编辑记录" = "Edit Note";
+"⌘↩ 保存" = "⌘↩ to save";
+"永久删除（不勾选则只标记删除线）" = "Delete permanently (otherwise just strike it through)";

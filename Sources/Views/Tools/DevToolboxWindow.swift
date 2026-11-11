@@ -45,6 +45,7 @@ final class DevToolboxWindow: NSObject, NSWindowDelegate {
         self.window = panel
         super.init()
         panel.delegate = self
+        state.didSelect = { [weak self] _ in self?.releaseFocusForNotepad() }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event -> NSEvent? in
             // 本地监视器固定在主线程回调；NSEvent 非 Sendable，判定结果先落地再返回
             let consumed: Bool = MainActor.assumeIsolated { self?.handle(event) ?? false }
@@ -71,6 +72,13 @@ final class DevToolboxWindow: NSObject, NSWindowDelegate {
         // 刻意不调 NSApp.activate：非激活面板自己能拿键盘焦点，激活会把主窗口拽到前台
         window.makeKeyAndOrderFront(nil)
         window.orderFrontRegardless()
+        releaseFocusForNotepad()
+    }
+
+    /// 记事本页不让任何输入框（含隐藏页的）默认持有焦点，否则 ⌘V 会被输入框吃掉，粘贴新建不生效
+    private func releaseFocusForNotepad() {
+        guard state.selected == .notepad, window.firstResponder is NSTextView else { return }
+        window.makeFirstResponder(nil)
     }
 
     func hide() {
@@ -110,6 +118,14 @@ final class DevToolboxWindow: NSObject, NSWindowDelegate {
         case 53: hide(); return true                                     // esc
         case 126: if !editing { move(-1); return true }                  // ↑
         case 125: if !editing { move(1); return true }                   // ↓
+        case 9:                                                          // ⌘V：记事本页且不在输入框里 → 剪贴板文本新建一条
+            if !editing, state.selected == .notepad,
+               event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
+               let text = NSPasteboard.general.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !text.isEmpty {
+                tool.notepad.add(text)
+                return true
+            }
         default: break
         }
         return false
@@ -129,7 +145,9 @@ final class DevToolboxWindow: NSObject, NSWindowDelegate {
 @MainActor
 @Observable
 final class DevToolboxPanelState {
-    var selected: DevTool
+    var selected: DevTool { didSet { didSelect?(selected) } }
+    /// 窗口挂钩：切工具后要调整焦点
+    @ObservationIgnored var didSelect: ((DevTool) -> Void)?
 
     init(selected: DevTool = .json) {
         self.selected = selected
