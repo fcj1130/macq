@@ -417,7 +417,7 @@ func runNotepadProbe() {
     store.move(c, to: b)
     expect(store.notes.map(\.id) == [a, b, c], "拖拽：c 往下移")
     let before = store.notes[0].updatedAt
-    store.update(a, text: "ALPHA 改")
+    store.update(a, text: "ALPHA 改", remindAt: nil)
     expect(store.notes[0].text == "ALPHA 改" && store.notes[0].updatedAt >= before, "编辑刷新内容与时间")
     expect(store.filtered("beta").map(\.id) == [b], "搜索大小写不敏感")
     expect(store.filtered("  ").count == 3, "空搜索返回全部")
@@ -428,6 +428,23 @@ func runNotepadProbe() {
     // 旧数据（无 deletedAt 键）仍能解码
     let legacy = #"[{"id":"\#(UUID().uuidString)","text":"old","updatedAt":0}]"#.data(using: .utf8)!
     expect((try? JSONDecoder().decode([NotepadNote].self, from: legacy))?.first?.deletedAt == nil, "旧数据兼容解码")
+    // 提醒：未到点不进 due；到点进 due；已处理退出；改提醒时间重置已处理
+    let r1 = store.add("提醒未到", remindAt: Date().addingTimeInterval(3600))
+    let r2 = store.add("提醒已到", remindAt: Date().addingTimeInterval(-60))
+    expect(!store.dueIDs.contains(r1) && store.dueIDs.contains(r2), "到点集合：只含已到点的")
+    var changes = 0
+    store.onChange = { changes += 1 }
+    store.markHandled(r2)
+    expect(!store.dueIDs.contains(r2) && changes > 0, "已处理：退出到点集合并通知便签")
+    expect(store.notes.first { $0.id == r2 }?.hasPendingReminder == false, "已处理：闹钟消失")
+    store.update(r2, text: "提醒已到", remindAt: Date().addingTimeInterval(-30))
+    expect(store.dueIDs.contains(r2), "改提醒时间：重置已处理，重新提醒")
+    store.remove(r2, permanently: false)
+    expect(!store.dueIDs.contains(r2), "软删除的记录不提醒")
+    store.onChange = nil
+    store.remove(r1, permanently: true)
+    store.remove(r2, permanently: true)
+
     let reloaded = NotepadStore(settings: settings)
     expect(reloaded.notes == store.notes, "持久化回读一致")
     settings.removeAll()
@@ -437,6 +454,14 @@ func runNotepadProbe() {
         let texts = ocr(rep, "notepad").joined(separator: " ")
         expect(texts.contains("ALPHA") && texts.contains("gamma"), "列表渲染出内容")
         expect(texts.contains("新增"), "新增按钮")
+    }
+
+    // 便签渲染
+    let sticky = host(StickyList(notes: [NotepadNote(text: "开会 review", remindAt: Date())], overflow: 2,
+                                 onOpen: { _ in }, onHandle: { _ in }), width: 276, height: 140)
+    if let rep = render(sticky) {
+        let texts = ocr(rep, "sticky").joined(separator: " ")
+        expect(texts.contains("开会") && texts.contains("2"), "便签：内容 + 溢出提示")
     }
 }
 

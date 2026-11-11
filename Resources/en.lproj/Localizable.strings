@@ -427,3 +427,8 @@
 "编辑记录" = "Edit Note";
 "⌘↩ 保存" = "⌘↩ to save";
 "永久删除（不勾选则只标记删除线）" = "Delete permanently (otherwise just strike it through)";
+"提醒时间" = "Remind at";
+"这条提醒处理完了？" = "Done with this reminder?";
+"已处理" = "Done";
+"处理完了" = "Mark as done";
+"还有 %d 条到点提醒" = "%d more reminders are due";

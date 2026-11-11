@@ -1248,13 +1248,10 @@ private struct NotepadTool: View {
     @State private var showEditor = false
     @State private var editingID: UUID?
     @State private var draft = ""
-
-    private static let timeFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd HH:mm"
-        return formatter
-    }()
+    @State private var remindOn = false
+    @State private var remindAt = Date().addingTimeInterval(3600)
+    /// 列表里点红色闹钟 → 确认是否已处理
+    @State private var confirmingHandled: NotepadNote?
 
     var body: some View {
         let notes = store.filtered(query)
@@ -1295,6 +1292,14 @@ private struct NotepadTool: View {
             Spacer(minLength: 0)
         }
         .padding(14)
+        .alert(AppLanguage.localized("这条提醒处理完了？"), isPresented: Binding(
+            get: { confirmingHandled != nil }, set: { if !$0 { confirmingHandled = nil } }
+        ), presenting: confirmingHandled) { note in
+            Button(AppLanguage.localized("已处理")) { store.markHandled(note.id) }
+            Button(AppLanguage.localized("取消"), role: .cancel) {}
+        } message: { note in
+            Text(note.text)
+        }
         // alert 里只能放单行 TextField，多行输入用 sheet + TextEditor
         .sheet(isPresented: $showEditor) {
             VStack(alignment: .leading, spacing: 10) {
@@ -1306,7 +1311,16 @@ private struct NotepadTool: View {
                     .padding(6)
                     .background(.background, in: RoundedRectangle(cornerRadius: 6))
                     .overlay(RoundedRectangle(cornerRadius: 6).stroke(.quaternary))
-                    .frame(width: 420, height: 180)
+                    .frame(width: 420, height: 160)
+                HStack(spacing: 8) {
+                    Toggle(AppLanguage.localized("提醒时间"), isOn: $remindOn)
+                        .toggleStyle(.checkbox)
+                    if remindOn {
+                        DatePicker("", selection: $remindAt, displayedComponents: [.date, .hourAndMinute])
+                            .labelsHidden()
+                            .datePickerStyle(.field)
+                    }
+                }
                 HStack {
                     Text(AppLanguage.localized("⌘↩ 保存")).font(.caption).foregroundStyle(.tertiary)
                     Spacer()
@@ -1349,17 +1363,22 @@ private struct NotepadTool: View {
     private func openEditor(_ note: NotepadNote?) {
         editingID = note?.id
         draft = note?.text ?? ""
+        // 已处理的提醒不再带过来（重设时间才会重新提醒）
+        let keep = note?.hasPendingReminder == true ? note?.remindAt : nil
+        remindOn = keep != nil
+        remindAt = keep ?? Date().addingTimeInterval(3600)
         showEditor = true
     }
 
     private func saveDraft() {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }   // 空内容不建 / 不改
+        let remind = remindOn ? remindAt : nil
         if let id = editingID {
-            store.update(id, text: text)
+            store.update(id, text: text, remindAt: remind)
         } else {
             query = ""   // 新记录可能不匹配当前搜索，清掉免得"加了看不见"
-            store.add(text)
+            store.add(text, remindAt: remind)
         }
     }
 
@@ -1372,6 +1391,19 @@ private struct NotepadTool: View {
                 .draggable(note.id.uuidString) {
                     Text(note.text).lineLimit(1).padding(6)
                 }
+            if note.hasPendingReminder {
+                // 读 store.dueIDs（被观察）而不是现算 isOverdue：跨过提醒时间时视图才会自己变红
+                let due = store.dueIDs.contains(note.id)
+                Button {
+                    if due { confirmingHandled = note }   // 到点了：点击确认已处理
+                } label: {
+                    Image(systemName: due ? "alarm.fill" : "alarm")
+                        .font(.system(size: 11))
+                        .foregroundStyle(due ? Color.red : Color.secondary)
+                }
+                .buttonStyle(.borderless)
+                .help(NotepadNote.timeFormatter.string(from: note.remindAt ?? Date()))
+            }
             Text(note.text)
                 .strikethrough(note.deletedAt != nil)
                 .foregroundStyle(note.deletedAt != nil ? .secondary : .primary)
@@ -1380,7 +1412,7 @@ private struct NotepadTool: View {
                 .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .help(note.text)
-            Text(Self.timeFormatter.string(from: note.updatedAt))
+            Text(NotepadNote.timeFormatter.string(from: note.updatedAt))
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
             Button {

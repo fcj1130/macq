@@ -41,6 +41,8 @@ final class DevToolbox: ToggleableTool, PermissionReporting {
 
     /// 记事本数据（与工具箱共用配置命名空间）
     let notepad: NotepadStore
+    /// 到点便签
+    private let reminder: NotepadReminder
 
     private static let schema = 1
     private static let migrations: [Int: (ToolSettings) -> Void] = [:]
@@ -70,9 +72,11 @@ final class DevToolbox: ToggleableTool, PermissionReporting {
         order = restored
         self.settings = settings
         notepad = NotepadStore(settings: settings)
+        reminder = NotepadReminder(store: notepad)
 
         hotKey.onFire = { [weak self] in self?.fire() }
         doubleTap.onFire = { [weak self] in self?.fire() }
+        reminder.onOpen = { [weak self] _ in self?.showNotepad() }
         sync()
     }
 
@@ -86,6 +90,7 @@ final class DevToolbox: ToggleableTool, PermissionReporting {
     // MARK: - 开关与快捷键
 
     private func sync() {
+        reminder.active = enabled
         if enabled {
             registerHotKey()
         } else {
@@ -174,6 +179,12 @@ final class DevToolbox: ToggleableTool, PermissionReporting {
             panel = DevToolboxWindow(tool: self)
         }
         panel?.show()
+    }
+
+    /// 便签点击：弹出工具箱并定位到记事本
+    func showNotepad() {
+        showPanel()
+        panel?.state.selected = .notepad
     }
 
     func hidePanel() {
