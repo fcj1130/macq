@@ -498,13 +498,9 @@ final class ShotCanvas: NSView, NSTextViewDelegate {
     private func bakeMosaic(_ r: CGRect) -> NSImage {
         let size = NSSize(width: max(r.width, 1), height: max(r.height, 1))
         guard r.width >= 2, r.height >= 2, let cg = sourceCG else { return NSImage(size: size) }
-        // r 已经是 CGImage 像素坐标；CGImage 原点在左下，画布坐标同样如此。
-        let crop = CGRect(
-            x: r.minX,
-            y: CGFloat(cg.height) - r.maxY,
-            width: r.width,
-            height: r.height
-        ).integral
+        // r 已经是 CGImage 像素坐标（左下原点），与 CIImage 同一坐标系，不能再翻一次 Y，
+        // 否则取到的是上下镜像的另一块：拖框偏上时马赛克就跑到别处/只剩一条。
+        let crop = r.integral
         let input = CIImage(cgImage: cg).cropped(to: crop)
         let filter = CIFilter(name: "CIPixellate")
         filter?.setValue(input, forKey: kCIInputImageKey)
@@ -698,6 +694,25 @@ final class ShotCanvas: NSView, NSTextViewDelegate {
             }
             AppShell.shared.afterSystemPanel(mainWasVisible: wasVisible, overlayStillUp: !dismissed)
         }
+    }
+
+    /// 只给探针用：模拟一次拖框（视图坐标）
+    func probeDrag(from: NSPoint, to: NSPoint) {
+        let win = window ?? NSWindow(contentRect: frame, styleMask: .borderless, backing: .buffered, defer: false)
+        func ev(_ t: NSEvent.EventType, _ p: NSPoint) -> NSEvent {
+            NSEvent.mouseEvent(with: t, location: p, modifierFlags: [], timestamp: 0,
+                               windowNumber: win.windowNumber, context: nil, eventNumber: 0,
+                               clickCount: 1, pressure: 1)!
+        }
+        mouseDown(with: ev(.leftMouseDown, from))
+        mouseDragged(with: ev(.leftMouseDragged, to))
+        mouseUp(with: ev(.leftMouseUp, to))
+    }
+
+    /// 只给探针用：最近一次马赛克标注（区域 + 烘焙结果）
+    func probeLastMosaic() -> (CGRect, NSImage)? {
+        for m in marks.reversed() { if case .mosaic(let r, let img) = m, let img { return (r, img) } }
+        return nil
     }
 
     private func render() -> NSImage {

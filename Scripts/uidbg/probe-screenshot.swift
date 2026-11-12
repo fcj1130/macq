@@ -94,6 +94,46 @@ func runProbe() {
     expect(ScreenshotCore.barSize(tool: .rect).height == 80, "矩形：展开颜色+粗细")
     expect(ScreenshotCore.barSize(tool: .text).height == 80, "文字：展开颜色+字号")
     expect(ScreenshotCore.barSize(tool: .mosaic).height == 44, "马赛克：无样式行")
+
+    // 马赛克：烘焙必须取自拖框那一块（早期 Y 轴多翻一次，内容上下镜像且落点错位）
+    let checker: CGImage = {
+        let w = 400, h = 300
+        let cs = CGColorSpace(name: CGColorSpace.sRGB)!
+        let c = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                          space: cs, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        for y in 0..<h { for x in 0..<w {
+            c.setFillColor(((x + y) % 2 == 0) ? NSColor.white.cgColor : NSColor.black.cgColor)
+            c.fill(CGRect(x: x, y: y, width: 1, height: 1))
+        }}
+        return c.makeImage()!
+    }()
+    let scratch = ShotCanvas(image: NSImage(cgImage: checker, size: NSSize(width: 200, height: 150)))
+    scratch.frame = NSRect(x: 0, y: 0, width: 200, height: 150)
+    scratch.tool = .mosaic
+    let dragFrom = NSPoint(x: 20, y: 100), dragTo = NSPoint(x: 180, y: 140)   // 偏上，未居中
+    scratch.probeDrag(from: dragFrom, to: dragTo)
+    if let (rect, baked) = scratch.probeLastMosaic() {
+        expect(rect == CGRect(x: 40, y: 200, width: 320, height: 80), "马赛克落点 = 拖框", "\(rect)")
+        var br = CGRect(origin: .zero, size: baked.size)
+        let bcg = baked.cgImage(forProposedRect: &br, context: nil, hints: nil)
+        let cs = CGColorSpace(name: CGColorSpace.sRGB)!
+        let bw = bcg?.width ?? 0, bh = bcg?.height ?? 0
+        var midRatio = 0.0
+        if let bcg, bw > 0, bh > 0 {
+            let buf = CGContext(data: nil, width: bw, height: bh, bitsPerComponent: 8,
+                                bytesPerRow: bw * 4, space: cs,
+                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+            buf.draw(bcg, in: CGRect(x: 0, y: 0, width: bw, height: bh))
+            let p = buf.data!.assumingMemoryBound(to: UInt8.self)
+            var mid = 0
+            for i in stride(from: 0, to: bw * bh * 4, by: 4) where p[i] > 40 && p[i] < 215 { mid += 1 }
+            midRatio = Double(mid) / Double(bw * bh)
+        }
+        // 棋盘被像素化后应是整片中间灰；若取到空白/纯色，比例会掉下来
+        expect(midRatio > 0.9, "烘焙内容是拖框那块（棋盘糊成灰）", String(format: "%.2f", midRatio))
+    } else {
+        expect(false, "马赛克标注已生成")
+    }
     expect(ScreenshotCore.ocrPanelSize(lineCount: 0, empty: true) == CGSize(width: 300, height: 52), "空识别结果面板高度")
     let ocrRight = ScreenshotCore.ocrPanelFrame(
         bar: CGRect(x: 100, y: 200, width: 480, height: 44),
