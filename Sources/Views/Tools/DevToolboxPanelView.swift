@@ -1412,6 +1412,7 @@ private struct NotepadTool: View {
                 .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .help(note.text)
+                .onTapGesture(count: 2) { openEditor(note) }   // 双击整行打开编辑框
             Text(NotepadNote.timeFormatter.string(from: note.updatedAt))
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
