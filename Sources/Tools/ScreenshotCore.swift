@@ -84,11 +84,20 @@ enum ScreenshotCore {
         case .w, .nw, .sw: minX = p.x
         case .n, .s: break
         }
-        var out = CGRect(x: Swift.min(minX, maxX), y: Swift.min(minY, maxY),
-                         width: abs(maxX - minX), height: abs(maxY - minY))
-        if out.width < minSize { out.size.width = minSize }
-        if out.height < minSize { out.size.height = minSize }
-        return out
+        // 拖过头时钳到最小尺寸，对边保持不动：只缩不留，不会整体位移。
+        // 之前是「取 min/max 再拉宽」，越过对边后整个框会跟着跑，手感是突然跳一下。
+        switch handle {
+        case .n, .nw, .ne: maxY = Swift.max(maxY, minY + minSize)
+        case .s, .sw, .se: minY = Swift.min(minY, maxY - minSize)
+        case .e, .w: break
+        }
+        switch handle {
+        case .e, .ne, .se: maxX = Swift.max(maxX, minX + minSize)
+        case .w, .nw, .sw: minX = Swift.min(minX, maxX - minSize)
+        case .n, .s: break
+        }
+        return CGRect(x: Swift.min(minX, maxX), y: Swift.min(minY, maxY),
+                      width: abs(maxX - minX), height: abs(maxY - minY))
     }
 
     static func move(_ r: CGRect, by d: CGPoint, in bounds: CGRect) -> CGRect {
@@ -212,6 +221,8 @@ enum ScreenshotCore {
         let identical: Bool
         /// identical 时这帧是否「像素级纹丝不动」（强证据）。对不上只算半票（弱证据）。
         var stable: Bool = false
+        /// 长图撞到 16384px 上限，本帧没有拼进去（必须停下来告诉用户，否则会空转到判到底）。
+        var overflow: Bool = false
     }
 
     /// 竖向拼接两帧：在 `next` 顶部找与 `base` 底部最像的重叠带，只追加新出来的部分。
@@ -286,7 +297,7 @@ enum ScreenshotCore {
         }
         let newH = Ha + added
         if newH > 16384 {
-            return Stitch(image: base, overlap: bestO, identical: true)
+            return Stitch(image: base, overlap: bestO, identical: true, stable: false, overflow: true)
         }
         let space = CGColorSpaceCreateDeviceRGB()
         let info = CGImageAlphaInfo.premultipliedLast.rawValue
@@ -304,6 +315,29 @@ enum ScreenshotCore {
         let scale = base.size.width / CGFloat(a.width)
         let img = NSImage(cgImage: out, size: NSSize(width: CGFloat(W) * scale, height: CGFloat(newH) * scale))
         return Stitch(image: img, overlap: bestO, identical: false)
+    }
+
+    /// 暂停后再开始时，当前整帧是否还能接在长图底部：把长图最后 Hb 行和这一帧整帧比。
+    /// 接不上（停止期间手动滚过、点开了新内容）必须重定基线，否则之后每帧都找不到重叠。
+    static func framesConnected(stitched: NSImage, next: NSImage) -> Bool {
+        var r1 = CGRect(origin: .zero, size: stitched.size)
+        var r2 = CGRect(origin: .zero, size: next.size)
+        guard let a = stitched.cgImage(forProposedRect: &r1, context: nil, hints: nil),
+              let b = next.cgImage(forProposedRect: &r2, context: nil, hints: nil),
+              a.width == b.width, b.height > 0, a.height >= b.height
+        else { return false }
+        let Hb = b.height
+        guard let band = a.cropping(to: CGRect(x: 0, y: a.height - Hb, width: a.width, height: Hb)),
+              let pa = ShotPix(band), let pb = ShotPix(b)
+        else { return false }
+        // 光标闪烁/悬停高亮会让个别行有差异，门槛放到 8 只认「页面整体换了」。
+        return pa.meanAbs(y: 0, other: pb, y: 0, rows: Hb, width: a.width, stepX: 4) < 8
+    }
+
+    static func pngData(_ img: NSImage) -> Data? {
+        var rect = CGRect(origin: .zero, size: img.size)
+        guard let cg = img.cgImage(forProposedRect: &rect, context: nil, hints: nil) else { return nil }
+        return NSBitmapImageRep(cgImage: cg).representation(using: .png, properties: [:])
     }
 
     static func scrollHitBottom(streak: Double, need: Double = 3) -> Bool {

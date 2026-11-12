@@ -60,6 +60,11 @@ func runProbe() {
     expect(west.minX == 40 && west.maxX == 300, "西手柄改原点、右缘不动")
     let tiny = ScreenshotCore.resize(sel, .e, to: CGPoint(x: 102, y: 140))
     expect(tiny.width >= 8, "缩到最小宽度 8")
+    // 拖过对边：对边不许跟着跑，否则手柄一拖整个框就跳。
+    let past = ScreenshotCore.resize(sel, .e, to: CGPoint(x: 50, y: 140))
+    expect(past.minX == 100 && past.width == 8, "东手柄拖过左缘：左缘不动、宽夹到 8", "\(past)")
+    let pastN = ScreenshotCore.resize(sel, .n, to: CGPoint(x: 200, y: 20))
+    expect(pastN.minY == 100 && pastN.height == 8, "北手柄拖过底边：锚定底边不动、高夹到 8", "\(pastN)")
     let drag = ScreenshotCore.rect(from: CGPoint(x: 10, y: 50), to: CGPoint(x: 4, y: 20))
     expect(drag == CGRect(x: 4, y: 20, width: 6, height: 30), "拖拽框选归一化")
     let bounds = CGRect(x: 0, y: 0, width: 1000, height: 800)
@@ -240,6 +245,12 @@ func runProbe() {
     expect(tight.intersection(CGRect(x: 20, y: 20, width: 1400, height: 860)).width
             * tight.intersection(CGRect(x: 20, y: 20, width: 1400, height: 860)).height
             < 120 * 200, "大选区时预览尽量少叠选区")
+    // 暂停后恢复：页面对得上就沿用长图，被手动滚过就判定接不上（必须重定基线）。
+    let connected = ScreenshotCore.framesConnected(stitched: listStitch.image, next: lb)
+    expect(connected, "整帧仍在长图底部：可沿用基线")
+    let jumped = ScreenshotCore.framesConnected(stitched: listStitch.image, next: listImage(width: 60, height: 300, offset: 600))
+    expect(!jumped, "暂停期间页面变了：基线不可沿用")
+    expect(ScreenshotCore.pngData(lb) != nil, "导出 PNG 数据")
     let tall = rampImage(width: 40, height: 90, offset: 0)
     let more = rampImage(width: 40, height: 60, offset: 60)
     let tallStitch = ScreenshotCore.stitchVertical(base: tall, next: more, expectedAdded: 30)

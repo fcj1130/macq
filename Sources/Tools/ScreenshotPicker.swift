@@ -129,11 +129,12 @@ final class ScreenshotPicker {
         panel.allowedContentTypes = [.png]
         panel.nameFieldStringValue = AppLanguage.localized("截图.png")
         panel.level = NSWindow.Level(rawValue: NSWindow.Level.screenSaver.rawValue + 2)
+        // 同 ScreenshotEditor.saveImage：不先激活，面板第一次拿不到 key，文件名框没法输入。
+        NSApp.activate(ignoringOtherApps: true)
         panel.begin { [weak self] ret in
             var dismissed = false
             if ret == .OK, let url = panel.url, let self,
-               let tiff = img.tiffRepresentation,
-               let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
+               let png = ScreenshotCore.pngData(img) {
                 try? png.write(to: url)
                 dismissed = true
                 self.finish()
@@ -209,8 +210,7 @@ final class ScreenshotPicker {
     }
 
     private func writePasteboard(_ img: NSImage) {
-        guard let tiff = img.tiffRepresentation,
-              let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else { return }
+        guard let png = ScreenshotCore.pngData(img) else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setData(png, forType: .png)
     }
@@ -265,6 +265,13 @@ final class ScreenshotPicker {
             }
         }
         (bar?.contentView as? ShotToolbar)?.refresh()
+        // 恢复滚动时不能无条件沿用旧基线：停止期间页面可能被手动滚过或被点开新内容，
+        // 后面每帧都会在旧长图底部找不到重叠，一路判「没滚」，最后误报滚到底。
+        if let prev = stitched, let cur = grabCurrent(),
+           !ScreenshotCore.framesConnected(stitched: prev, next: cur) {
+            stitched = cur
+            log.info("暂停期间页面变了，重置长图基线")
+        }
         if stitched == nil { stitched = grabCurrent(); showPreview() }
         // Retina 下捕获像素是点的一倍，期望新增按真实缩放算。
         var pxPerPoint = 2.0
@@ -326,6 +333,12 @@ final class ScreenshotPicker {
                     }
                     continue
                 }
+                if r.overflow {
+                    self.showPreview()
+                    self.showToast(AppLanguage.localized("已到图片高度上限（16384px），先复制这段再继续"))
+                    self.stopScroll(atBottom: true)
+                    break
+                }
                 same = 0
                 self.stitched = r.image
                 ticks += 1
@@ -359,10 +372,7 @@ final class ScreenshotPicker {
 
     private func showToast(_ text: String, seconds: TimeInterval = 1.6) {
         toast?.orderOut(nil)
-        let probe = NSTextField(labelWithString: text)
-        probe.font = .systemFont(ofSize: 13, weight: .medium)
-        probe.sizeToFit()
-        let size = NSSize(width: max(180, probe.frame.width + 28), height: 36)
+        let size = NSSize(width: max(180, (text as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 13)]).width + 28), height: 36)
         let screen = overlays.first?.frame ?? NSScreen.main?.frame ?? .zero
         var origin = CGPoint(x: screen.midX - size.width / 2, y: screen.midY + 80)
         if let sel = selection {
@@ -541,6 +551,8 @@ final class ScreenshotPicker {
 
     private func handleKey(_ event: NSEvent) -> Bool {
         if let canvas {
+            // 正在输入标注文字：⌘C / Esc 归文本框（否则复制走整张图、Esc 直接退出截图）。
+            if canvas.isEditingText, event.keyCode != 36, event.keyCode != 76 { return false }
             if event.modifierFlags.contains(.command) {
                 switch event.keyCode {
                 case 6: canvas.undo(); return true

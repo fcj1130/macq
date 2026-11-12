@@ -233,7 +233,9 @@ final class ShotToolbar: NSView {
         runBtn = NSButton(title: AppLanguage.localized("开始"), target: self, action: #selector(toggleScroll))
         runBtn.bezelStyle = .rounded
         runBtn.toolTip = AppLanguage.localized("空格也可开始/停止")
-        runBtn.frame = NSRect(x: x, y: 8, width: 64, height: 28)
+        // 「开始/停止」只出现在滚动模式，此时 undo/OCR 都隐藏；宽度收窄到 32，
+        // 否则 64 宽会压到 x+36 处的 OCR 按钮。
+        runBtn.frame = NSRect(x: x, y: 8, width: 32, height: 28)
         runBtn.isHidden = true
         addSubview(runBtn)
         x += 36
@@ -532,6 +534,10 @@ final class ShotCanvas: NSView, NSTextViewDelegate {
         CGPoint(x: p.x / max(viewScaleX, 0.01), y: p.y / max(viewScaleY, 0.01))
     }
 
+    /// 文字编辑中：键盘事件（⌘C 复制文字、Esc 退出输入）归文本框，
+    /// 不能让外层截图快捷键截走——否则复制截图/退出整个截图。
+    var isEditingText: Bool { textView != nil }
+
     override func mouseDown(with event: NSEvent) {
         if event.clickCount >= 2 {
             draft = nil
@@ -680,11 +686,12 @@ final class ShotCanvas: NSView, NSTextViewDelegate {
         panel.allowedContentTypes = [.png]
         panel.nameFieldStringValue = AppLanguage.localized("截图.png")
         panel.level = NSWindow.Level(rawValue: NSWindow.Level.screenSaver.rawValue + 2)
+        // accessory 应用在截图结束时不是前台 app，面板会显示但拿不到 key，
+        // 文件名输入框吃不到键盘；先激活自己（用户点取消就是完成了这次激活）。
+        NSApp.activate(ignoringOtherApps: true)
         panel.begin { [weak self] ret in
             var dismissed = false
-            if ret == .OK, let url = panel.url, let self,
-               let tiff = self.render().tiffRepresentation,
-               let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
+            if ret == .OK, let url = panel.url, let self, let png = ScreenshotCore.pngData(self.render()) {
                 try? png.write(to: url)
                 dismissed = true
                 self.onDone?()
